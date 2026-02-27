@@ -1,34 +1,73 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useCallback, useState } from 'react'
+import Sidebar from './components/Sidebar'
+import ChatWindow, { type ChatMessage } from './components/ChatWindow'
+import MessageInput from './components/MessageInput'
+import { generateAzureAnswer, isAzureConfigured } from './services/azureService'
 
-function App() {
-  const [count, setCount] = useState(0)
+const FALLBACK_MESSAGE = 'I don’t have information in the knowledge base.'
+
+const App: React.FC = () => {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isThinking, setIsThinking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed || isThinking) return
+
+      const timestamp = new Date().toISOString()
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: trimmed,
+        timestamp,
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setError(null)
+      setIsThinking(true)
+
+      try {
+        if (!isAzureConfigured()) {
+          throw new Error('Azure configuration is missing.')
+        }
+
+        const answer = await generateAzureAnswer(trimmed)
+        const content =
+          answer && answer.trim().length > 0 ? answer : FALLBACK_MESSAGE
+
+        const botMessage: ChatMessage = {
+          role: 'bot',
+          content,
+          timestamp: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, botMessage])
+      } catch (err) {
+        console.error(err)
+        setError('Unable to reach Azure OpenAI. Showing fallback response.')
+        const botMessage: ChatMessage = {
+          role: 'bot',
+          content: FALLBACK_MESSAGE,
+          timestamp: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, botMessage])
+      } finally {
+        setIsThinking(false)
+      }
+    },
+    [isThinking],
+  )
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-container">
+      <Sidebar />
+      <div className="main-area">
+        <ChatWindow messages={messages} isThinking={isThinking} />
+        {error && <div className="error-banner">{error}</div>}
+        <div className="bottom-bar">
+          <MessageInput onSend={handleSendMessage} disabled={isThinking} />
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
