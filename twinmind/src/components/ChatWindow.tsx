@@ -9,6 +9,8 @@ export interface ChatMessage {
 interface ChatWindowProps {
   messages: ChatMessage[]
   isThinking: boolean
+  title: string
+  subtitle?: string
 }
 
 function formatTime(dateString?: string): string {
@@ -21,7 +23,12 @@ function formatTime(dateString?: string): string {
   }
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isThinking }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({
+  messages,
+  isThinking,
+  title,
+  subtitle,
+}) => {
   const listRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -34,10 +41,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isThinking }) => {
     <div className="chat-window">
       <div className="chat-header">
         <div>
-          <h2 className="chat-title">TwinMind</h2>
-          <p className="chat-subtitle">
-            Questions are answered only from your indexed documents.
-          </p>
+          <h2 className="chat-title">{title}</h2>
+          {subtitle && <p className="chat-subtitle">{subtitle}</p>}
         </div>
       </div>
       <div className="message-list" ref={listRef}>
