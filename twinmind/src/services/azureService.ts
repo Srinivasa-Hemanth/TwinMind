@@ -4,11 +4,10 @@ declare const process: {
 
 const getEnv = (key: string): string | undefined => {
   // Vite / modern bundlers: import.meta.env
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-    const value = (import.meta as any).env[key]
-    if (typeof value === 'string') {
-      return value
-    }
+  const metaEnv = (import.meta.env as unknown) as Record<string, unknown>
+  const value = metaEnv[key]
+  if (typeof value === 'string') {
+    return value
   }
   // CRA / Node-style: process.env
   if (typeof process !== 'undefined' && process.env && process.env[key]) {

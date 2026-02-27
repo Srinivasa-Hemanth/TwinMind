@@ -233,6 +233,46 @@ textarea {
   border-bottom: 1px solid #e2e8f0;
 }
 
+.chat-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.06s ease, background 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.icon-button:hover {
+  background: #dbeafe;
+  transform: translateY(-1px);
+}
+
+.icon-button:active {
+  transform: translateY(0);
+}
+
+.icon-button-danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.icon-button-danger:hover {
+  background: #fee2e2;
+}
+
 .chat-title {
   margin: 0;
   font-size: 18px;
@@ -354,6 +394,97 @@ textarea {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+}
+
+.call-recorder-shell {
+  min-width: 260px;
+  max-width: 340px;
+}
+
+.call-recorder-shell--hidden {
+  display: none;
+}
+
+.call-recorder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.call-recorder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.call-recorder-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.call-recorder-status {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #e2e8f0;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.call-recorder-status--recording {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.call-recorder-status--error {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.call-recorder-status--unsupported {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.call-recorder-transcript {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 8px 10px;
+  max-height: 110px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.call-recorder-transcript-placeholder {
+  margin: 0;
+  color: #64748b;
+}
+
+.call-recorder-error {
+  font-size: 11px;
+  color: #991b1b;
+}
+
+.call-recorder-meta {
+  font-size: 10px;
+  color: #64748b;
 }
 
 .recorder {

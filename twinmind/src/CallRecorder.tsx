@@ -1,29 +1,73 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type CallRecorderStatus = 'Idle' | 'Recording' | 'Unsupported' | 'Error'
 
 type CallRecorderProps = {
+  /**
+   * When true, the recorder will start and keep recording. When false, it stops and downloads the transcript.
+   * If omitted, falls back to `autoStart` for backward compatibility.
+   */
+  active?: boolean
+  /**
+   * Backward-compatible alias for `active`.
+   */
   autoStart?: boolean
+  /**
+   * If false, hides the Start/End buttons (useful when controlled by a call icon).
+   */
+  showControls?: boolean
   onRecordingStart?: () => void
   onRecordingEnd?: () => void
 }
 
-declare global {
-  interface Window {
-    // Use loose typing here because Web Speech API types are not yet in lib.dom
-    // and vary slightly across browsers.
-    webkitSpeechRecognition?: new () => any
-    SpeechRecognition?: new () => any
-  }
+type SpeechRecognitionAlternativeLike = {
+  transcript: string
 }
 
-const getSpeechRecognitionConstructor = () => {
+type SpeechRecognitionResultLike = {
+  isFinal: boolean
+  0: SpeechRecognitionAlternativeLike
+}
+
+type SpeechRecognitionResultListLike = {
+  length: number
+  [index: number]: SpeechRecognitionResultLike
+}
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number
+  results: SpeechRecognitionResultListLike
+}
+
+type SpeechRecognitionErrorEventLike = {
+  error?: string
+}
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start: () => void
+  stop: () => void
+  onstart: ((this: SpeechRecognitionLike, ev: Event) => void) | null
+  onend: ((this: SpeechRecognitionLike, ev: Event) => void) | null
+  onresult: ((this: SpeechRecognitionLike, ev: SpeechRecognitionEventLike) => void) | null
+  onerror: ((this: SpeechRecognitionLike, ev: SpeechRecognitionErrorEventLike) => void) | null
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+
+const getSpeechRecognitionConstructor = (): SpeechRecognitionCtor | null => {
   if (typeof window === 'undefined') {
     return null
   }
-  return (window.SpeechRecognition || window.webkitSpeechRecognition || null) as
-    | (new () => any)
-    | null
+
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor
+    webkitSpeechRecognition?: SpeechRecognitionCtor
+  }
+
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
 const formatTimestamp = (date: Date) => {
@@ -60,58 +104,157 @@ const triggerDownload = (filename: string, content: string) => {
   URL.revokeObjectURL(url)
 }
 
-export function CallRecorder({ autoStart, onRecordingStart, onRecordingEnd }: CallRecorderProps) {
-  const [status, setStatus] = useState<CallRecorderStatus>('Idle')
+export function CallRecorder({
+  active,
+  autoStart,
+  showControls = true,
+  onRecordingStart,
+  onRecordingEnd,
+}: CallRecorderProps) {
+  const recognitionCtor = useMemo(() => getSpeechRecognitionConstructor(), [])
+  const supported = Boolean(recognitionCtor)
+
+  const [internalActive, setInternalActive] = useState(false)
+  const desiredActive = active ?? autoStart ?? internalActive
+
+  const [status, setStatus] = useState<CallRecorderStatus>(() =>
+    supported ? 'Idle' : 'Unsupported',
+  )
   const [isRecording, setIsRecording] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [finalTranscript, setFinalTranscript] = useState('')
+  const [interimTranscript, setInterimTranscript] = useState('')
+  const [error, setError] = useState<string | null>(() =>
+    supported
+      ? null
+      : 'Speech recognition is not supported in this browser. Please use the latest version of Google Chrome.',
+  )
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [endTime, setEndTime] = useState<Date | null>(null)
 
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const desiredActiveRef = useRef(false)
   const isManuallyStoppingRef = useRef(false)
+  const shouldDownloadOnStopRef = useRef(false)
+  const pendingStartTimeRef = useRef<Date | null>(null)
+  const pendingEndTimeRef = useRef<Date | null>(null)
+  const startTimeRef = useRef<Date | null>(null)
+  const finalTranscriptRef = useRef('')
+
+  const finalizeAndDownloadTranscript = useCallback((startedAt: Date, endedAt: Date) => {
+    const started = formatTimestamp(startedAt)
+    const ended = formatTimestamp(endedAt)
+    const transcriptText = finalTranscriptRef.current.trim()
+
+    const content = `Call Started: ${started}
+Call Ended: ${ended}
+
+Transcript:
+${transcriptText || '(no speech captured)'}
+`
+
+    const filename = `transcript_${formatFilenameTimestamp(endedAt)}.txt`
+    triggerDownload(filename, content)
+
+    setFinalTranscript('')
+    setInterimTranscript('')
+    finalTranscriptRef.current = ''
+    startTimeRef.current = null
+    setStartTime(null)
+    setEndTime(null)
+  }, [])
 
   useEffect(() => {
-    const RecognitionCtor = getSpeechRecognitionConstructor()
+    desiredActiveRef.current = desiredActive
+  }, [desiredActive])
 
-    if (!RecognitionCtor) {
-      setStatus('Unsupported')
-      setError(
-        'Speech recognition is not supported in this browser. Please use the latest version of Google Chrome.',
-      )
-      return
-    }
+  useEffect(() => {
+    if (!recognitionCtor) return
 
-    const recognition = new RecognitionCtor()
+    const recognition = new recognitionCtor()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
 
-    recognition.onresult = (event: any) => {
-      let fullTranscript = ''
-      for (let i = 0; i < event.results.length; i += 1) {
-        const result = event.results[i]
-        fullTranscript += result[0].transcript
-        if (result.isFinal) {
-          fullTranscript += ' '
-        }
+    recognition.onstart = () => {
+      setError(null)
+      setStatus('Recording')
+      setIsRecording(true)
+
+      const startedAt = pendingStartTimeRef.current ?? new Date()
+      pendingStartTimeRef.current = null
+      startTimeRef.current = startedAt
+      setStartTime(startedAt)
+      setEndTime(null)
+
+      finalTranscriptRef.current = ''
+      setFinalTranscript('')
+      setInterimTranscript('')
+
+      if (onRecordingStart) {
+        onRecordingStart()
       }
-      setTranscript(fullTranscript.trim())
     }
 
-    recognition.onerror = () => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
+      let interim = ''
+      let appendedFinal = ''
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i]
+        const text = result[0]?.transcript ?? ''
+        if (result.isFinal) {
+          appendedFinal += text
+        } else {
+          interim += text
+        }
+      }
+
+      if (appendedFinal) {
+        const nextFinal = `${finalTranscriptRef.current}${appendedFinal} `
+        finalTranscriptRef.current = nextFinal
+        setFinalTranscript(nextFinal.trim())
+      }
+
+      setInterimTranscript(interim.trim())
+    }
+
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
+      const code = event.error ?? ''
+      const message =
+        code === 'not-allowed' || code === 'service-not-allowed'
+          ? 'Microphone permission is blocked. Please allow mic access and try again.'
+          : 'An error occurred during speech recognition.'
+
       setStatus('Error')
-      setError('An error occurred during speech recognition.')
+      setError(message)
       setIsRecording(false)
     }
 
     recognition.onend = () => {
       if (isManuallyStoppingRef.current) {
         isManuallyStoppingRef.current = false
+        const finishedAt = pendingEndTimeRef.current ?? new Date()
+        pendingEndTimeRef.current = null
+
+        setIsRecording(false)
+        setStatus('Idle')
+        setEndTime(finishedAt)
+
+        const startedAt = startTimeRef.current
+        if (shouldDownloadOnStopRef.current && startedAt) {
+          shouldDownloadOnStopRef.current = false
+          finalizeAndDownloadTranscript(startedAt, finishedAt)
+        } else {
+          shouldDownloadOnStopRef.current = false
+        }
+
+        if (onRecordingEnd) {
+          onRecordingEnd()
+        }
+
         return
       }
 
-      if (isRecording) {
+      if (desiredActiveRef.current) {
         try {
           recognition.start()
         } catch {
@@ -119,111 +262,58 @@ export function CallRecorder({ autoStart, onRecordingStart, onRecordingEnd }: Ca
           setError('Unable to restart speech recognition automatically.')
           setIsRecording(false)
         }
+      } else {
+        setIsRecording(false)
+        setStatus('Idle')
       }
     }
 
     recognitionRef.current = recognition
-    setStatus('Idle')
 
     return () => {
+      recognition.onstart = null
       recognition.onresult = null
       recognition.onerror = null
       recognition.onend = null
-      recognition.stop()
+      try {
+        recognition.stop()
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null
     }
-  }, [isRecording])
+  }, [finalizeAndDownloadTranscript, onRecordingEnd, onRecordingStart, recognitionCtor])
 
   useEffect(() => {
-    if (autoStart && status === 'Idle' && !isRecording) {
-      void handleStart()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, status])
-
-  const finalizeAndDownloadTranscript = (finalTranscript: string, startedAt: Date, endedAt: Date) => {
-    const started = formatTimestamp(startedAt)
-    const ended = formatTimestamp(endedAt)
-
-    const content = `Call Started: ${started}
-Call Ended: ${ended}
-
-Transcript:
-${finalTranscript || '(no speech captured)'}
-`
-
-    const filename = `transcript_${formatFilenameTimestamp(endedAt)}.txt`
-    triggerDownload(filename, content)
-
-    setTranscript('')
-    setStartTime(null)
-    setEndTime(null)
-  }
-
-  const handleStart = async () => {
-    if (status === 'Unsupported' || isRecording) {
-      return
-    }
-
+    if (!supported) return
     const recognition = recognitionRef.current
-    if (!recognition) {
-      setStatus('Error')
-      setError('Speech recognition is not ready.')
-      return
-    }
+    if (!recognition) return
 
-    try {
-      setError(null)
-      const now = new Date()
-      setStartTime(now)
-      setEndTime(null)
-      setIsRecording(true)
-      setStatus('Recording')
-      recognition.start()
-      if (onRecordingStart) {
-        onRecordingStart()
+    if (desiredActive) {
+      pendingStartTimeRef.current = new Date()
+      try {
+        recognition.start()
+      } catch {
+        // ignore (e.g. already started)
       }
-    } catch {
-      setStatus('Error')
-      setError('Failed to start speech recognition.')
-      setIsRecording(false)
-    }
-  }
-
-  const handleStop = () => {
-    if (!isRecording) {
       return
     }
 
-    const recognition = recognitionRef.current
-    if (!recognition) {
-      setIsRecording(false)
-      setStatus('Idle')
-      return
+    if (isRecording) {
+      isManuallyStoppingRef.current = true
+      shouldDownloadOnStopRef.current = true
+      pendingEndTimeRef.current = new Date()
+      try {
+        recognition.stop()
+      } catch {
+        // ignore
+      }
     }
-
-    isManuallyStoppingRef.current = true
-    try {
-      recognition.stop()
-    } catch {
-      // ignore
-    }
-
-    const finishedAt = new Date()
-    setIsRecording(false)
-    setStatus('Idle')
-    setEndTime(finishedAt)
-
-    if (startTime) {
-      finalizeAndDownloadTranscript(transcript, startTime, finishedAt)
-    }
-
-    if (onRecordingEnd) {
-      onRecordingEnd()
-    }
-  }
+  }, [desiredActive, isRecording, supported])
 
   const isStartDisabled = isRecording || status === 'Unsupported'
   const isEndDisabled = !isRecording
+  const liveTranscript = `${finalTranscript}${finalTranscript && interimTranscript ? ' ' : ''}${interimTranscript}`
 
   return (
     <div className="call-recorder">
@@ -235,8 +325,8 @@ ${finalTranscript || '(no speech captured)'}
       </div>
 
       <div className="call-recorder-transcript">
-        {transcript ? (
-          <p>{transcript}</p>
+        {liveTranscript ? (
+          <p>{liveTranscript}</p>
         ) : (
           <p className="call-recorder-transcript-placeholder">
             {status === 'Unsupported'
@@ -248,24 +338,26 @@ ${finalTranscript || '(no speech captured)'}
 
       {error && <div className="call-recorder-error">{error}</div>}
 
-      <div className="call-recorder-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleStart}
-          disabled={isStartDisabled}
-        >
-          Start Call
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger"
-          onClick={handleStop}
-          disabled={isEndDisabled}
-        >
-          End Call
-        </button>
-      </div>
+      {showControls && (
+        <div className="call-recorder-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setInternalActive(true)}
+            disabled={isStartDisabled}
+          >
+            Start Call
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => setInternalActive(false)}
+            disabled={isEndDisabled}
+          >
+            End Call
+          </button>
+        </div>
+      )}
 
       {startTime && !endTime && (
         <div className="call-recorder-meta">Call started at: {formatTimestamp(startTime)}</div>

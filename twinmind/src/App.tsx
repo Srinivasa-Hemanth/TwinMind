@@ -3,6 +3,7 @@ import Sidebar, { type ChatSummary } from './components/Sidebar'
 import ChatWindow, { type ChatMessage } from './components/ChatWindow'
 import MessageInput from './components/MessageInput'
 import { generateAzureAnswer, isAzureConfigured } from './services/azureService'
+import CallRecorder from './CallRecorder'
 
 const FALLBACK_MESSAGE = 'I don’t have information in the knowledge base.'
 
@@ -56,6 +57,7 @@ const App: React.FC = () => {
   })
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCallActive, setIsCallActive] = useState(false)
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedChatId) ?? chats[0],
@@ -65,6 +67,7 @@ const App: React.FC = () => {
   const currentMessages = messagesByChat[selectedChat.id] ?? []
 
   const handleSelectChat = useCallback((id: string) => {
+    setIsCallActive(false)
     setSelectedChatId(id as ChatId)
     setError(null)
   }, [])
@@ -185,6 +188,17 @@ const App: React.FC = () => {
     ? 'Questions are answered only from your indexed documents.'
     : 'Personal chat'
 
+  const shouldShowRecorder = selectedChat.isBot || isCallActive
+
+  const handleStartCall = useCallback(() => {
+    if (!selectedChat.isBot) return
+    setIsCallActive(true)
+  }, [selectedChat.isBot])
+
+  const handleEndCall = useCallback(() => {
+    setIsCallActive(false)
+  }, [])
+
   return (
     <div className="app-container">
       <Sidebar
@@ -198,9 +212,22 @@ const App: React.FC = () => {
           isThinking={isThinking && selectedChat.isBot}
           title={selectedChat.title}
           subtitle={chatSubtitle}
+          canStartCall={selectedChat.isBot}
+          isCallActive={selectedChat.isBot ? isCallActive : false}
+          onStartCall={handleStartCall}
+          onEndCall={handleEndCall}
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
+          <div
+            className={`call-recorder-shell ${shouldShowRecorder ? '' : 'call-recorder-shell--hidden'}`}
+            aria-hidden={!shouldShowRecorder}
+          >
+            <CallRecorder
+              active={selectedChat.isBot ? isCallActive : false}
+              showControls={false}
+            />
+          </div>
           <MessageInput onSend={handleSendMessage} disabled={isThinking} />
         </div>
       </div>
