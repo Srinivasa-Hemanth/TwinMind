@@ -1,42 +1,338 @@
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: radial-gradient(circle at top, #1f2937 0, #020617 55%, #000 100%);
+  color: #e5e7eb;
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  box-sizing: border-box;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.app-root {
+  width: 100%;
+  max-width: 1120px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.twinmind-call {
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.12), transparent 60%),
+    rgba(15, 23, 42, 0.92);
+  border-radius: 1.25rem;
+  padding: 1.75rem 2rem 2rem;
+  box-shadow:
+    0 18px 45px rgba(15, 23, 42, 0.85),
+    0 0 0 1px rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(148, 163, 184, 0.33);
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.twinmind-call-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.twinmind-call-title {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.02em;
+  color: #f9fafb;
+}
+
+.twinmind-call-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #9ca3af;
+}
+
+.twinmind-call-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr);
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.twinmind-call-participants {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.7));
+  border: 1px solid rgba(55, 65, 81, 0.9);
+}
+
+.twinmind-avatar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.9rem;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(31, 41, 55, 0.9);
+  font-size: 0.93rem;
+}
+
+.twinmind-avatar::before {
+  content: '';
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 20%, #f9fafb, #9ca3af 50%, #4b5563 100%);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.7),
+    0 10px 24px rgba(0, 0, 0, 0.9);
+}
+
+.twinmind-avatar--bot::before {
+  background:
+    radial-gradient(circle at 30% 20%, #fefce8, #fde047 40%, #a855f7 80%),
+    radial-gradient(circle at 80% 80%, #22c55e, transparent 60%);
+}
+
+.twinmind-call-status {
+  font-size: 0.9rem;
+  color: #9ca3af;
+  margin-top: 1rem;
+}
+
+.twinmind-call-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.6rem 0.16rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  font-size: 0.8rem;
+}
+
+.twinmind-call-status-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #4b5563;
+}
+
+.twinmind-call-status-badge--on {
+  border-color: rgba(34, 197, 94, 0.8);
+  background: rgba(22, 163, 74, 0.1);
+  color: #bbf7d0;
+}
+
+.twinmind-call-status-badge--on::before {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+}
+
+.twinmind-call-status-badge--off {
+  color: #9ca3af;
+}
+
+.twinmind-call-controls {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.twinmind-call-recorder {
+  margin-top: 0.5rem;
+}
+
+.call-recorder {
+  border-radius: 1rem;
+  padding: 1.1rem 1.25rem 1.2rem;
+  background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 60%),
+    rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(55, 65, 81, 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.call-recorder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.call-recorder-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.call-recorder-status {
+  padding: 0.18rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  background: rgba(15, 23, 42, 0.9);
+  color: #9ca3af;
+}
+
+.call-recorder-status--recording {
+  border-color: rgba(248, 113, 113, 0.9);
+  background: rgba(127, 29, 29, 0.6);
+  color: #fecaca;
+}
+
+.call-recorder-status--idle {
+  color: #9ca3af;
+}
+
+.call-recorder-status--unsupported {
+  border-color: rgba(148, 163, 184, 0.9);
+}
+
+.call-recorder-status--error {
+  border-color: rgba(248, 113, 113, 0.9);
+  color: #fecaca;
+}
+
+.call-recorder-transcript {
+  min-height: 120px;
+  max-height: 220px;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.8rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(31, 41, 55, 0.95);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-align: left;
+  overflow-y: auto;
+}
+
+.call-recorder-transcript p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.call-recorder-transcript-placeholder {
+  margin: 0;
+  color: #6b7280;
+}
+
+.call-recorder-error {
+  font-size: 0.8rem;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.7);
+  border-radius: 0.65rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgba(248, 113, 113, 0.9);
+}
+
+.call-recorder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.call-recorder-meta {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.btn {
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.12s ease-out,
+    background 0.12s ease-out,
+    opacity 0.12s ease-out;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #eff6ff;
+  box-shadow:
+    0 12px 24px rgba(37, 99, 235, 0.35),
+    0 0 0 1px rgba(59, 130, 246, 0.6);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fee2e2;
+  box-shadow:
+    0 12px 24px rgba(185, 28, 28, 0.45),
+    0 0 0 1px rgba(248, 113, 113, 0.7);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 30px rgba(15, 23, 42, 0.95),
+    0 0 0 1px rgba(148, 163, 184, 0.6);
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow:
+    0 10px 18px rgba(15, 23, 42, 0.9),
+    0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
+@media (max-width: 900px) {
+  #root {
+    padding: 1.5rem 1rem;
   }
-  to {
-    transform: rotate(360deg);
+
+  .twinmind-call {
+    padding: 1.4rem 1.25rem 1.5rem;
+  }
+
+  .twinmind-call-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+@media (max-width: 640px) {
+  .twinmind-call-title {
+    font-size: 1.35rem;
+  }
+
+  .twinmind-call {
+    border-radius: 1rem;
+  }
+
+  .twinmind-call-controls {
+    flex-direction: column;
+  }
+
+  .call-recorder {
+    padding: 1rem 0.9rem 1.1rem;
   }
 }
 
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
