@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
+import NavRail from './components/NavRail'
 import Sidebar, { type ChatSummary } from './components/Sidebar'
 import ChatWindow, { type ChatMessage } from './components/ChatWindow'
 import MessageInput from './components/MessageInput'
@@ -41,6 +42,30 @@ const initialChats: ChatSummary[] = [
     isBot: false,
     avatarInitials: 'TT',
   },
+  {
+    id: 'john',
+    title: 'John Doe',
+    lastMessagePreview: 'Can you send the report?',
+    timeLabel: 'Yesterday',
+    isBot: false,
+    avatarInitials: 'JD',
+  },
+  {
+    id: 'jane',
+    title: 'Jane Smith',
+    lastMessagePreview: 'Thanks!',
+    timeLabel: 'Yesterday',
+    isBot: false,
+    avatarInitials: 'JS',
+  },
+  {
+    id: 'alex',
+    title: 'Alex Johnson',
+    lastMessagePreview: 'Meeting at 3 PM.',
+    timeLabel: 'Monday',
+    isBot: false,
+    avatarInitials: 'AJ',
+  },
 ]
 
 const App: React.FC = () => {
@@ -50,9 +75,48 @@ const App: React.FC = () => {
     Record<string, ChatMessage[]>
   >({
     twinmind: [],
-    pravallika: [],
-    sai: [],
-    team: [],
+    pravallika: [
+      {
+        role: 'bot',
+        content: 'Hey Srinivasa, check out this query:\n\n```sql\nSELECT * INTO COI_Backup_10282025 FROM COI\n```\n\nRun this first.',
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    sai: [
+      {
+        role: 'bot',
+        content: 'yes Uday',
+        timestamp: new Date(Date.now() - 10000000).toISOString(),
+      },
+    ],
+    team: [
+      {
+        role: 'bot',
+        content: 'Daily NOP updates – quick sync.',
+        timestamp: new Date(Date.now() - 20000000).toISOString(),
+      },
+    ],
+    john: [
+      {
+        role: 'bot',
+        content: 'Can you send the report?',
+        timestamp: new Date(Date.now() - 86400000).toISOString(),
+      },
+    ],
+    jane: [
+      {
+        role: 'bot',
+        content: 'Thanks!',
+        timestamp: new Date(Date.now() - 86400000).toISOString(),
+      },
+    ],
+    alex: [
+      {
+        role: 'bot',
+        content: 'Meeting at 3 PM.',
+        timestamp: new Date(Date.now() - 172800000).toISOString(),
+      },
+    ],
   })
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -93,31 +157,19 @@ const App: React.FC = () => {
         prev.map((chat) =>
           chat.id === selectedChat.id
             ? {
-                ...chat,
-                lastMessagePreview: trimmed,
-                timeLabel: new Date().toLocaleTimeString([], {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                }),
-              }
+              ...chat,
+              lastMessagePreview: trimmed,
+              timeLabel: new Date().toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit',
+              }),
+            }
             : chat,
         ),
       )
 
       if (!selectedChat.isBot) {
-        // Simple local echo for non-bot chats
-        const reply: ChatMessage = {
-          role: 'bot',
-          content: 'This is a sample chat thread for UI purposes.',
-          timestamp: new Date().toISOString(),
-        }
-        setMessagesByChat((prev) => {
-          const existing = prev[selectedChat.id] ?? []
-          return {
-            ...prev,
-            [selectedChat.id]: [...existing, reply],
-          }
-        })
+        // AI does not respond to non-bot chats.
         return
       }
 
@@ -149,13 +201,13 @@ const App: React.FC = () => {
           prev.map((chat) =>
             chat.id === selectedChat.id
               ? {
-                  ...chat,
-                  lastMessagePreview: content.slice(0, 80),
-                  timeLabel: new Date().toLocaleTimeString([], {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  }),
-                }
+                ...chat,
+                lastMessagePreview: content.slice(0, 80),
+                timeLabel: new Date().toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }),
+              }
               : chat,
           ),
         )
@@ -187,6 +239,7 @@ const App: React.FC = () => {
 
   return (
     <div className="app-container">
+      <NavRail />
       <Sidebar
         chats={chats}
         selectedChatId={selectedChat.id}
@@ -198,6 +251,8 @@ const App: React.FC = () => {
           isThinking={isThinking && selectedChat.isBot}
           title={selectedChat.title}
           subtitle={chatSubtitle}
+          avatarInitials={selectedChat.avatarInitials}
+          isBot={selectedChat.isBot}
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
