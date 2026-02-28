@@ -11,14 +11,17 @@ const CallModal: React.FC<CallModalProps> = ({ isOpen, contactName, avatarInitia
     const [seconds, setSeconds] = useState(0)
 
     useEffect(() => {
-        let interval: number
+        let interval: number | undefined
         if (isOpen) {
-            setSeconds(0)
             interval = window.setInterval(() => {
                 setSeconds((s) => s + 1)
             }, 1000)
         }
-        return () => clearInterval(interval)
+        return () => {
+            if (interval !== undefined) {
+                clearInterval(interval)
+            }
+        }
     }, [isOpen])
 
     if (!isOpen) return null

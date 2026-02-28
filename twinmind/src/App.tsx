@@ -122,11 +122,11 @@ const App: React.FC = () => {
   })
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isCallActive, setIsCallActive] = useState(false)
 
   // Call State
   const [isCallModalOpen, setIsCallModalOpen] = useState(false)
   const [activeCallContact, setActiveCallContact] = useState<Pick<ChatSummary, 'title' | 'avatarInitials'> | null>(null)
+  const [callSessionId, setCallSessionId] = useState(0)
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedChatId) ?? chats[0],
@@ -136,7 +136,8 @@ const App: React.FC = () => {
   const currentMessages = messagesByChat[selectedChat.id] ?? []
 
   const handleSelectChat = useCallback((id: string) => {
-    setIsCallActive(false)
+    setIsCallModalOpen(false)
+    setActiveCallContact(null)
     setSelectedChatId(id as ChatId)
     setError(null)
   }, [])
@@ -250,6 +251,7 @@ const App: React.FC = () => {
       title: selectedChat.title,
       avatarInitials: selectedChat.avatarInitials
     })
+    setCallSessionId((s) => s + 1)
     setIsCallModalOpen(true)
   }, [selectedChat])
 
@@ -290,6 +292,8 @@ const App: React.FC = () => {
     )
   }, [])
 
+  const shouldShowRecorder = selectedChat.isBot && isCallModalOpen
+
   return (
     <div className="app-container">
       <NavRail />
@@ -306,9 +310,9 @@ const App: React.FC = () => {
           subtitle={chatSubtitle}
           avatarInitials={selectedChat.avatarInitials}
           isBot={selectedChat.isBot}
-                  onStartCall={handleStartCall}
-                  canStartCall={selectedChat.isBot}
-                  isCallActive={selectedChat.isBot ? isCallActive : false}
+          onStartCall={handleStartCall}
+          canStartCall={selectedChat.isBot}
+          isCallActive={selectedChat.isBot ? isCallModalOpen : false}
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
@@ -317,7 +321,7 @@ const App: React.FC = () => {
             aria-hidden={!shouldShowRecorder}
           >
             <CallRecorder
-              active={selectedChat.isBot ? isCallActive : false}
+              active={selectedChat.isBot ? isCallModalOpen : false}
               showControls={false}
             />
           </div>
@@ -327,6 +331,7 @@ const App: React.FC = () => {
 
       {/* Absolute overlay for the call experience */}
       <CallModal
+        key={callSessionId}
         isOpen={isCallModalOpen}
         contactName={activeCallContact?.title || ''}
         avatarInitials={activeCallContact?.avatarInitials || ''}
