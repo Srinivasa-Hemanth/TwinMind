@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMsal } from '@azure/msal-react'
+import { loginRequest } from './authConfig'
+
 
 type CallRecorderStatus = 'Idle' | 'Recording' | 'Unsupported' | 'Error'
 
@@ -16,8 +19,10 @@ type CallRecorderProps = {
    * If false, hides the Start/End buttons (useful when controlled by a call icon).
    */
   showControls?: boolean
+  contactName?: string
   onRecordingStart?: () => void
   onRecordingEnd?: () => void
+  onTranscriptChange?: (text: string) => void
 }
 
 type SpeechRecognitionAlternativeLike = {
@@ -92,25 +97,29 @@ const formatFilenameTimestamp = (date: Date) => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`
 }
 
-const triggerDownload = (filename: string, content: string) => {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
+
 
 export function CallRecorder({
   active,
   autoStart,
   showControls = true,
+  contactName,
   onRecordingStart,
   onRecordingEnd,
+  onTranscriptChange,
 }: CallRecorderProps) {
+  const { instance, accounts } = useMsal()
+  const account = instance.getActiveAccount() || accounts[0] || null
+
+  const handleSignIn = useCallback(() => {
+    try {
+      setError(null)
+      instance.loginRedirect(loginRequest)
+    } catch (e: any) {
+      console.error('MSAL redirect failed:', e)
+      setError(`Redirect failed: ${e.message ?? e.toString()}`)
+    }
+  }, [instance])
   const recognitionCtor = useMemo(() => getSpeechRecognitionConstructor(), [])
   const supported = Boolean(recognitionCtor)
 
@@ -132,6 +141,10 @@ export function CallRecorder({
   const [endTime, setEndTime] = useState<Date | null>(null)
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+
   const desiredActiveRef = useRef(false)
   const isManuallyStoppingRef = useRef(false)
   const shouldDownloadOnStopRef = useRef(false)
@@ -139,29 +152,78 @@ export function CallRecorder({
   const pendingEndTimeRef = useRef<Date | null>(null)
   const startTimeRef = useRef<Date | null>(null)
   const finalTranscriptRef = useRef('')
+  const onTranscriptChangeRef = useRef(onTranscriptChange)
 
-  const finalizeAndDownloadTranscript = useCallback((startedAt: Date, endedAt: Date) => {
+  useEffect(() => {
+    onTranscriptChangeRef.current = onTranscriptChange
+  }, [onTranscriptChange])
+
+  const finalizeAndDownloadTranscript = useCallback(async (startedAt: Date, endedAt: Date) => {
     const started = formatTimestamp(startedAt)
     const ended = formatTimestamp(endedAt)
     const transcriptText = finalTranscriptRef.current.trim()
 
-    const content = `Call Started: ${started}
-Call Ended: ${ended}
+    const contactDisplay = contactName || 'Unknown Contact'
+    const safeContactName = contactDisplay.replace(/[^a-z0-9]/gi, '_').toLowerCase()
 
-Transcript:
-${transcriptText || '(no speech captured)'}
-`
+    const content = `Call with: ${contactDisplay}\nCall Started: ${started}\nCall Ended: ${ended}\n\nTranscript:\n${transcriptText || '(no speech captured)'}\n`
 
-    const filename = `transcript_${formatFilenameTimestamp(endedAt)}.txt`
-    triggerDownload(filename, content)
+    const timestampName = formatFilenameTimestamp(endedAt)
+    const transcriptFilename = `call_transcript_${safeContactName}_${timestampName}.txt`
+
+    const transcriptBlob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+
+    try {
+      console.log('Saving locally to Projects/Calls Transcript...')
+
+      // Save Transcript
+      await fetch('/api/save-file', {
+        method: 'POST',
+        headers: { 'x-file-name': transcriptFilename },
+        body: transcriptBlob
+      })
+
+      console.log('Local save complete')
+      setError(null)
+    } catch (err: any) {
+      console.error('Local save failed:', err)
+      setError('Failed to save files locally to the Projects folder.')
+    }
+
+    /*
+    // FORMER ONEDRIVE UPLOAD LOGIC COMMENTED OUT
+    if (account) {
+      try {
+        console.log('Uploading to OneDrive...')
+        await uploadToOneDrive(instance, account, transcriptBlob, transcriptFilename)
+        if (audioBlob) {
+          await uploadToOneDrive(instance, account, audioBlob, recordingFilename)
+        }
+        console.log('Upload complete')
+        setError(null)
+      } catch (err: any) {
+        console.error('Upload failed:', err)
+        setError('Failed to upload files to OneDrive.')
+      }
+    } else {
+      console.warn('No OneDrive account. Skipping upload.');
+      setError('Please sign in to OneDrive to save recordings.');
+    }
+    */
 
     setFinalTranscript('')
     setInterimTranscript('')
     finalTranscriptRef.current = ''
     startTimeRef.current = null
+    audioChunksRef.current = []
     setStartTime(null)
     setEndTime(null)
-  }, [])
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+  }, [account, instance])
 
   useEffect(() => {
     desiredActiveRef.current = desiredActive
@@ -175,20 +237,16 @@ ${transcriptText || '(no speech captured)'}
     recognition.interimResults = true
     recognition.lang = 'en-US'
 
-    recognition.onstart = () => {
+    recognition.onstart = async () => {
       setError(null)
       setStatus('Recording')
       setIsRecording(true)
 
-      const startedAt = pendingStartTimeRef.current ?? new Date()
+      const startedAt = pendingStartTimeRef.current ?? startTimeRef.current ?? new Date()
       pendingStartTimeRef.current = null
       startTimeRef.current = startedAt
       setStartTime(startedAt)
       setEndTime(null)
-
-      finalTranscriptRef.current = ''
-      setFinalTranscript('')
-      setInterimTranscript('')
 
       if (onRecordingStart) {
         onRecordingStart()
@@ -197,36 +255,43 @@ ${transcriptText || '(no speech captured)'}
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let interim = ''
-      let appendedFinal = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i]
-        const text = result[0]?.transcript ?? ''
-        if (result.isFinal) {
-          appendedFinal += text
+      let finalForThisLoop = ''
+
+      // Process all results from the current event
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalForThisLoop += event.results[i][0].transcript + ' '
         } else {
-          interim += text
+          interim += event.results[i][0].transcript
         }
       }
 
-      if (appendedFinal) {
-        const nextFinal = `${finalTranscriptRef.current}${appendedFinal} `
-        finalTranscriptRef.current = nextFinal
-        setFinalTranscript(nextFinal.trim())
+      if (finalForThisLoop) {
+        finalTranscriptRef.current += finalForThisLoop
+        setFinalTranscript(finalTranscriptRef.current.trim())
       }
 
       setInterimTranscript(interim.trim())
+
+      if (onTranscriptChangeRef.current) {
+        const fullTranscript = `${finalTranscriptRef.current} ${interim}`.trim()
+        onTranscriptChangeRef.current(fullTranscript)
+      }
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       const code = event.error ?? ''
-      const message =
-        code === 'not-allowed' || code === 'service-not-allowed'
-          ? 'Microphone permission is blocked. Please allow mic access and try again.'
-          : 'An error occurred during speech recognition.'
 
-      setStatus('Error')
-      setError(message)
-      setIsRecording(false)
+      // Do not hard-stop on errors unless it's a permission block.
+      // Some browsers (like Chrome) emit 'no-speech' or 'network' errors and stop.
+      // We rely on `onend` to restart it if desiredActive is still true.
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setStatus('Error')
+        setError('Microphone permission is blocked. Please allow mic access and try again.')
+        setIsRecording(false)
+      } else {
+        console.warn('Speech recognition error:', code)
+      }
     }
 
     recognition.onend = () => {
@@ -239,12 +304,25 @@ ${transcriptText || '(no speech captured)'}
         setStatus('Idle')
         setEndTime(finishedAt)
 
-        const startedAt = startTimeRef.current
-        if (shouldDownloadOnStopRef.current && startedAt) {
-          shouldDownloadOnStopRef.current = false
-          finalizeAndDownloadTranscript(startedAt, finishedAt)
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.onstop = () => {
+            const startedAt = startTimeRef.current
+            if (shouldDownloadOnStopRef.current && startedAt) {
+              shouldDownloadOnStopRef.current = false
+              finalizeAndDownloadTranscript(startedAt, finishedAt)
+            } else {
+              shouldDownloadOnStopRef.current = false
+            }
+          }
+          mediaRecorderRef.current.stop()
         } else {
-          shouldDownloadOnStopRef.current = false
+          const startedAt = startTimeRef.current
+          if (shouldDownloadOnStopRef.current && startedAt) {
+            shouldDownloadOnStopRef.current = false
+            finalizeAndDownloadTranscript(startedAt, finishedAt)
+          } else {
+            shouldDownloadOnStopRef.current = false
+          }
         }
 
         if (onRecordingEnd) {
@@ -255,13 +333,18 @@ ${transcriptText || '(no speech captured)'}
       }
 
       if (desiredActiveRef.current) {
-        try {
-          recognition.start()
-        } catch {
-          setStatus('Error')
-          setError('Unable to restart speech recognition automatically.')
-          setIsRecording(false)
-        }
+        // Continuous mode in Chrome often randomly stops after a while or on silence.
+        // If we still want to be active, we instantly restart it.
+        // We use a small timeout because calling start() synchronously inside onend can throw an InvalidStateError in some browsers.
+        setTimeout(() => {
+          if (desiredActiveRef.current) {
+            try {
+              recognition.start()
+            } catch (err) {
+              console.warn('Failed to auto-restart speech recognition:', err)
+            }
+          }
+        }, 100)
       } else {
         setIsRecording(false)
         setStatus('Idle')
@@ -291,6 +374,47 @@ ${transcriptText || '(no speech captured)'}
 
     if (desiredActive) {
       pendingStartTimeRef.current = new Date()
+
+      // ONLY CLEAR ON FRESH START
+      if (!isRecording && finalTranscriptRef.current === '' && audioChunksRef.current.length === 0) {
+        // Safe baseline start
+      } else if (!isRecording && (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive')) {
+        finalTranscriptRef.current = ''
+        setFinalTranscript('')
+        setInterimTranscript('')
+        audioChunksRef.current = []
+      }
+
+      const ensureMediaRecorder = async () => {
+        if (!streamRef.current || !mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              }
+            })
+            streamRef.current = stream
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
+            mediaRecorderRef.current = mediaRecorder
+
+            mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                audioChunksRef.current.push(event.data)
+              }
+            }
+
+            mediaRecorder.start()
+          } catch (err) {
+            console.error('Failed to get user media', err)
+            setError('Failed to capture audio for recording.')
+          }
+        }
+      }
+
+      ensureMediaRecorder()
+
       try {
         recognition.start()
       } catch {
@@ -319,9 +443,24 @@ ${transcriptText || '(no speech captured)'}
     <div className="call-recorder">
       <div className="call-recorder-header">
         <h2 className="call-recorder-title">Call Recorder</h2>
-        <span className={`call-recorder-status call-recorder-status--${status.toLowerCase()}`}>
-          {status}
-        </span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {!account && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleSignIn}
+              style={{ fontSize: '12px', padding: '4px 8px' }}
+            >
+              Sign in to OneDrive
+            </button>
+          )}
+          {account && (
+            <span style={{ fontSize: '12px', color: 'green' }}>✓ Signed in</span>
+          )}
+          <span className={`call-recorder-status call-recorder-status--${status.toLowerCase()}`}>
+            {status}
+          </span>
+        </div>
       </div>
 
       <div className="call-recorder-transcript">

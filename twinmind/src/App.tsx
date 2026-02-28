@@ -127,6 +127,7 @@ const App: React.FC = () => {
   const [isCallModalOpen, setIsCallModalOpen] = useState(false)
   const [activeCallContact, setActiveCallContact] = useState<Pick<ChatSummary, 'title' | 'avatarInitials'> | null>(null)
   const [callSessionId, setCallSessionId] = useState(0)
+  const [liveTranscript, setLiveTranscript] = useState('')
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedChatId) ?? chats[0],
@@ -258,11 +259,12 @@ const App: React.FC = () => {
   const handleEndCall = useCallback((momTranscript: string) => {
     setIsCallModalOpen(false)
     setActiveCallContact(null)
+    setLiveTranscript('')
 
     // Inject the MOM into the TwinMind chat history automatically
     const timestamp = new Date().toISOString()
     const momMessage: ChatMessage = {
-      role: 'user', // Treat the MOM as a user-provided piece of context/transcript
+      role: 'bot', // Treat the MOM as a bot-provided piece of context/transcript
       content: momTranscript,
       timestamp,
     }
@@ -292,7 +294,7 @@ const App: React.FC = () => {
     )
   }, [])
 
-  const shouldShowRecorder = selectedChat.isBot && isCallModalOpen
+  const shouldShowRecorder = isCallModalOpen
 
   return (
     <div className="app-container">
@@ -311,8 +313,8 @@ const App: React.FC = () => {
           avatarInitials={selectedChat.avatarInitials}
           isBot={selectedChat.isBot}
           onStartCall={handleStartCall}
-          canStartCall={selectedChat.isBot}
-          isCallActive={selectedChat.isBot ? isCallModalOpen : false}
+          canStartCall={true}
+          isCallActive={isCallModalOpen}
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
@@ -321,8 +323,10 @@ const App: React.FC = () => {
             aria-hidden={!shouldShowRecorder}
           >
             <CallRecorder
-              active={selectedChat.isBot ? isCallModalOpen : false}
+              active={isCallModalOpen}
               showControls={false}
+              contactName={activeCallContact?.title || 'Unknown Contact'}
+              onTranscriptChange={setLiveTranscript}
             />
           </div>
           <MessageInput onSend={handleSendMessage} disabled={isThinking} />
@@ -336,6 +340,7 @@ const App: React.FC = () => {
         contactName={activeCallContact?.title || ''}
         avatarInitials={activeCallContact?.avatarInitials || ''}
         onEndCall={handleEndCall}
+        liveTranscript={liveTranscript}
       />
     </div>
   )
