@@ -35,7 +35,7 @@ const CallModal: React.FC<CallModalProps> = ({ isOpen, contactName, avatarInitia
 
     const handleEndCall = () => {
         // Generate MOM based on the real transcript
-        const mom = `**MOM (Minutes of Meeting) with ${contactName}:**\n\n${liveTranscript ? `Transcript snapshot:\n"${liveTranscript}"\n\n` : ''}*(Transcript and Recording saved to OneDrive automatically)*\n\n*(Summary provided by TwinMind AI)*`
+        const mom = `**MOM (Minutes of Meeting) with ${contactName}:**\n\n${liveTranscript ? `Transcript snapshot:\n"${liveTranscript}"\n\n` : ''}`
         onEndCall(mom)
     }
 

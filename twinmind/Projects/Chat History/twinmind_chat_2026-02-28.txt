@@ -1,0 +1,20 @@
+TwinMind Daily Chat Log - 2026-02-28
+
+User [15:40:57]:
+hi
+
+TwinMind [15:41:04]:
+Hello! How can I assist you today?
+
+User [15:42:24]:
+tell me about escalation flow in po tracker
+
+TwinMind [15:42:37]:
+The escalation flow in the PO Tracker is designed to ensure timely follow-up and resolution of purchase order requests that are not approved or created within specified timeframes. Here's a summary of the escalation path:
+
+1. **After 72 hours** – Escalate to the Property Manager (PM).
+2. **After 96 hours** – Escalate to the Market Property Manager (MPM) and Market Technical Manager (MTM).
+3. **After 120 hours** – Escalate to the Group Manager Market Operations (GMMO).
+4. **After 144 hours** – Final escalation to GMMO.
+
+If a purchase order (PO) does not appear in the system within the specified timeline, an escalation process is triggered to ensure accountability and prompt action.

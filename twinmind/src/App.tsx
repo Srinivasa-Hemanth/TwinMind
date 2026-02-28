@@ -128,6 +128,29 @@ const App: React.FC = () => {
   const [activeCallContact, setActiveCallContact] = useState<Pick<ChatSummary, 'title' | 'avatarInitials'> | null>(null)
   const [callSessionId, setCallSessionId] = useState(0)
   const [liveTranscript, setLiveTranscript] = useState('')
+  const [isSpeaking, setIsSpeaking] = useState(false)
+
+  // Ensure any ongoing text-to-speech stops if the user reloads or navigates away
+  React.useEffect(() => {
+    const handleBeforeUnload = () => window.speechSynthesis.cancel()
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.speechSynthesis.cancel()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+
+  // Hydrate chat history from the offline JSON state
+  React.useEffect(() => {
+    fetch('/api/get-chat-history')
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          setMessagesByChat(prev => ({ ...prev, twinmind: data }))
+        }
+      })
+      .catch(err => console.error('Failed to load chat history:', err))
+  }, [])
 
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedChatId) ?? chats[0],
@@ -143,10 +166,20 @@ const App: React.FC = () => {
     setError(null)
   }, [])
 
+  const handleStopSpeech = useCallback(() => {
+    window.speechSynthesis.cancel()
+    setIsSpeaking(false)
+  }, [])
+
+
+
   const handleSendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim()
       if (!trimmed || isThinking) return
+
+      // Determine if user is asking the AI to speak the answer aloud
+      const isVoiceRequest = /\b(voice|speech|speak|vocal|read|say)\b/i.test(trimmed)
 
       const timestamp = new Date().toISOString()
       const userMessage: ChatMessage = {
@@ -195,11 +228,66 @@ const App: React.FC = () => {
         const content =
           answer && answer.trim().length > 0 ? answer : FALLBACK_MESSAGE
 
+        // If the user requested speech, read the answer aloud using browser TTS
+        if (isVoiceRequest && content !== FALLBACK_MESSAGE) {
+          window.speechSynthesis.cancel() // Stop any currently playing speech
+          const utterance = new SpeechSynthesisUtterance(content)
+          utterance.lang = 'en-US'
+
+          // Attempt to find a female voice from the OS
+          const voices = window.speechSynthesis.getVoices()
+          const femaleVoice = voices.find((v) =>
+            v.name.includes('Female') ||
+            v.name.includes('Zira') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Susan')
+          )
+
+          if (femaleVoice) {
+            utterance.voice = femaleVoice
+          }
+
+          utterance.onstart = () => setIsSpeaking(true)
+          utterance.onend = () => setIsSpeaking(false)
+          utterance.onerror = () => setIsSpeaking(false)
+
+          window.speechSynthesis.speak(utterance)
+        }
+
         const botMessage: ChatMessage = {
           role: 'bot',
           content,
           timestamp: new Date().toISOString(),
         }
+
+        // --- Save Chat History to Projects/Chat History ---
+        const updatedTwinMindChat = [...(messagesByChat.twinmind || []), userMessage, botMessage]
+        const chatTranscriptString = updatedTwinMindChat.map(m => `${m.role === 'user' ? 'User' : 'TwinMind'} [${new Date(m.timestamp || '').toLocaleTimeString()}]:\n${m.content}\n`).join('\n')
+
+        const todayDateStr = new Date().toISOString().split('T')[0]
+        const chatBlob = new Blob([`TwinMind Daily Chat Log - ${todayDateStr}\n\n${chatTranscriptString}`], { type: 'text/plain;charset=utf-8' })
+
+        fetch('/api/save-file', {
+          method: 'POST',
+          headers: {
+            'x-file-name': `twinmind_chat_${todayDateStr}.txt`,
+            'x-folder-name': 'Chat History'
+          },
+          body: chatBlob
+        }).catch(e => console.error('Failed to save chat history:', e))
+
+        // Save internal JSON state for frontend hydration
+        const stateBlob = new Blob([JSON.stringify(updatedTwinMindChat)], { type: 'application/json' })
+        fetch('/api/save-file', {
+          method: 'POST',
+          headers: {
+            'x-file-name': 'twinmind_chat_history.json',
+            'x-folder-name': 'Chat History'
+          },
+          body: stateBlob
+        }).catch(e => console.error('Failed to save chat history JSON state:', e))
+        // --------------------------------------------------
+
         setMessagesByChat((prev) => {
           const existing = prev[selectedChat.id] ?? []
           return {
@@ -318,6 +406,31 @@ const App: React.FC = () => {
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
+          {isSpeaking && (
+            <div style={{ padding: '0 1rem 0.5rem 1rem', display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={handleStopSpeech}
+                style={{
+                  background: 'rgba(255, 59, 48, 0.1)',
+                  color: '#ff3b30',
+                  border: '1px solid rgba(255, 59, 48, 0.3)',
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                Stop AI Voice
+              </button>
+            </div>
+          )}
           <div
             className={`call-recorder-shell ${shouldShowRecorder ? '' : 'call-recorder-shell--hidden'}`}
             aria-hidden={!shouldShowRecorder}

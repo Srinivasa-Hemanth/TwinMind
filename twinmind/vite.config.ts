@@ -21,12 +21,14 @@ export default defineConfig({
                         });
                         req.on('end', () => {
                             const fileName = req.headers['x-file-name'] as string;
+                            const folderName = (req.headers['x-folder-name'] as string) || 'Calls Transcript';
+
                             if (!fileName) {
                                 res.statusCode = 400;
                                 return res.end('Missing file name');
                             }
-                            // Save to "Projects/Calls Transcript" in the project root
-                            const targetDir = path.join(process.cwd(), 'Projects', 'Calls Transcript');
+                            // Save to specific folder inside Projects
+                            const targetDir = path.join(process.cwd(), 'Projects', folderName);
                             if (!fs.existsSync(targetDir)) {
                                 fs.mkdirSync(targetDir, { recursive: true });
                             }
@@ -36,6 +38,41 @@ export default defineConfig({
                             res.statusCode = 200;
                             res.end(JSON.stringify({ success: true, path: filePath }));
                         });
+                    } else if (req.method === 'POST' && req.url === '/api/chat') {
+                        let body = '';
+                        req.on('data', chunk => {
+                            body += chunk.toString();
+                        });
+                        req.on('end', async () => {
+                            try {
+                                const { url, headers, payload } = JSON.parse(body);
+                                const response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: headers,
+                                    body: JSON.stringify(payload)
+                                });
+
+                                const data = await response.text();
+                                res.statusCode = response.status;
+                                res.setHeader('Content-Type', 'application/json');
+                                res.end(data);
+                            } catch (e: any) {
+                                console.error('Proxy Fetch Error:', e, e.cause);
+                                res.statusCode = 500;
+                                res.end(JSON.stringify({ error: String(e), cause: e.cause ? String(e.cause) : null }));
+                            }
+                        });
+                    } else if (req.method === 'GET' && req.url === '/api/get-chat-history') {
+                        const historyPath = path.join(process.cwd(), 'Projects', 'Chat History', 'twinmind_chat_history.json');
+                        res.setHeader('Content-Type', 'application/json');
+                        if (fs.existsSync(historyPath)) {
+                            const data = fs.readFileSync(historyPath, 'utf8');
+                            res.statusCode = 200;
+                            res.end(data);
+                        } else {
+                            res.statusCode = 200;
+                            res.end(JSON.stringify([]));
+                        }
                     } else if (req.method === 'GET' && req.url === '/api/get-project-docs') {
                         const targetDir = path.join(process.cwd(), 'Projects');
                         let docs: { filename: string, content: string }[] = [];
