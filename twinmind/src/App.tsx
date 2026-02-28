@@ -3,6 +3,7 @@ import NavRail from './components/NavRail'
 import Sidebar, { type ChatSummary } from './components/Sidebar'
 import ChatWindow, { type ChatMessage } from './components/ChatWindow'
 import MessageInput from './components/MessageInput'
+import CallModal from './components/CallModal'
 import { generateAzureAnswer, isAzureConfigured } from './services/azureService'
 
 const FALLBACK_MESSAGE = 'I don’t have information in the knowledge base.'
@@ -121,6 +122,10 @@ const App: React.FC = () => {
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Call State
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false)
+  const [activeCallContact, setActiveCallContact] = useState<Pick<ChatSummary, 'title' | 'avatarInitials'> | null>(null)
+
   const selectedChat = useMemo(
     () => chats.find((c) => c.id === selectedChatId) ?? chats[0],
     [chats, selectedChatId],
@@ -181,7 +186,7 @@ const App: React.FC = () => {
           throw new Error('Azure configuration is missing.')
         }
 
-        const answer = await generateAzureAnswer(trimmed)
+        const answer = await generateAzureAnswer([...(messagesByChat.twinmind || []), userMessage])
         const content =
           answer && answer.trim().length > 0 ? answer : FALLBACK_MESSAGE
 
@@ -237,6 +242,51 @@ const App: React.FC = () => {
     ? 'Questions are answered only from your indexed documents.'
     : 'Personal chat'
 
+  const handleStartCall = useCallback(() => {
+    setActiveCallContact({
+      title: selectedChat.title,
+      avatarInitials: selectedChat.avatarInitials
+    })
+    setIsCallModalOpen(true)
+  }, [selectedChat])
+
+  const handleEndCall = useCallback((momTranscript: string) => {
+    setIsCallModalOpen(false)
+    setActiveCallContact(null)
+
+    // Inject the MOM into the TwinMind chat history automatically
+    const timestamp = new Date().toISOString()
+    const momMessage: ChatMessage = {
+      role: 'user', // Treat the MOM as a user-provided piece of context/transcript
+      content: momTranscript,
+      timestamp,
+    }
+
+    setMessagesByChat((prev) => {
+      const existingTwinmind = prev['twinmind'] ?? []
+      return {
+        ...prev,
+        twinmind: [...existingTwinmind, momMessage],
+      }
+    })
+
+    // Update the twinmind summary preview
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === 'twinmind'
+          ? {
+            ...chat,
+            lastMessagePreview: 'Saved recent meeting transcript.',
+            timeLabel: new Date().toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            }),
+          }
+          : chat,
+      ),
+    )
+  }, [])
+
   return (
     <div className="app-container">
       <NavRail />
@@ -253,12 +303,21 @@ const App: React.FC = () => {
           subtitle={chatSubtitle}
           avatarInitials={selectedChat.avatarInitials}
           isBot={selectedChat.isBot}
+          onStartCall={handleStartCall}
         />
         {error && <div className="error-banner">{error}</div>}
         <div className="bottom-bar">
           <MessageInput onSend={handleSendMessage} disabled={isThinking} />
         </div>
       </div>
+
+      {/* Absolute overlay for the call experience */}
+      <CallModal
+        isOpen={isCallModalOpen}
+        contactName={activeCallContact?.title || ''}
+        avatarInitials={activeCallContact?.avatarInitials || ''}
+        onEndCall={handleEndCall}
+      />
     </div>
   )
 }
