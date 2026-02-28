@@ -19,23 +19,17 @@ const getEnv = (key: string): string | undefined => {
 const AZURE_ENDPOINT = getEnv('REACT_APP_AZURE_OPENAI_ENDPOINT')
 const AZURE_KEY = getEnv('REACT_APP_AZURE_OPENAI_KEY')
 const AZURE_DEPLOYMENT = getEnv('REACT_APP_AZURE_DEPLOYMENT_NAME')
-const AZURE_SEARCH_ENDPOINT = getEnv('REACT_APP_AZURE_SEARCH_ENDPOINT')
-const AZURE_SEARCH_KEY = getEnv('REACT_APP_AZURE_SEARCH_KEY')
-const AZURE_SEARCH_INDEX = getEnv('REACT_APP_AZURE_SEARCH_INDEX')
 
 export function isAzureConfigured(): boolean {
   return Boolean(
     AZURE_ENDPOINT &&
-      AZURE_KEY &&
-      AZURE_DEPLOYMENT &&
-      AZURE_SEARCH_ENDPOINT &&
-      AZURE_SEARCH_KEY &&
-      AZURE_SEARCH_INDEX,
+    AZURE_KEY &&
+    AZURE_DEPLOYMENT
   )
 }
 
 export async function generateAzureAnswer(
-  question: string,
+  messages: Array<{ role: string; content: string }>,
 ): Promise<string | null> {
   if (!isAzureConfigured()) {
     throw new Error('Azure OpenAI is not configured.')
@@ -56,22 +50,16 @@ export async function generateAzureAnswer(
     body: JSON.stringify({
       messages: [
         {
-          role: 'user',
-          content: question,
+          role: 'system',
+          content: 'You are TwinMind AI. You have access to recent transcripts and meetings provided by the user in the chat history. Answer their questions accurately based on this context. Be conversational and helpful.'
         },
+        ...messages.map(m => ({
+          role: m.role,
+          content: m.content
+        }))
       ],
       temperature: 0.2,
       max_tokens: 800,
-      data_sources: [
-        {
-          type: 'azure_search',
-          parameters: {
-            endpoint: AZURE_SEARCH_ENDPOINT,
-            key: AZURE_SEARCH_KEY,
-            index_name: AZURE_SEARCH_INDEX,
-          },
-        },
-      ],
     }),
   })
 
