@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { loginRequest } from './authConfig'
+import { generateOpenAIAnswer, isOpenAIConfigured } from './services/openaiService'
 
 
 type CallRecorderStatus = 'Idle' | 'Recording' | 'Unsupported' | 'Error'
@@ -165,13 +166,26 @@ export function CallRecorder({
 
     const contactDisplay = contactName || 'Unknown Contact'
     const safeContactName = contactDisplay.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+    const transcriptLength = transcriptText.length
+    let finalContentToSave = `Call with: ${contactDisplay}\nCall Started: ${started}\nCall Ended: ${ended}\n\nTranscript:\n${transcriptText || '(no speech captured)'}\n`
 
-    const content = `Call with: ${contactDisplay}\nCall Started: ${started}\nCall Ended: ${ended}\n\nTranscript:\n${transcriptText || '(no speech captured)'}\n`
+    if (transcriptLength > 10 && isOpenAIConfigured()) {
+      try {
+        console.log('Generating AI summary for MOM...')
+        const prompt = `Please act as a professional secretary. Read the following raw transcript from a call with ${contactDisplay} and provide a concise 'Minutes of Meeting' (MOM) summary. Do not output the raw transcript. Output only the key discussion points, decisions made, and action items in bullet points.\n\nTranscript:\n${transcriptText}`
+        const summary = await generateOpenAIAnswer([{ role: 'user', content: prompt }])
+        if (summary) {
+          finalContentToSave = `Call with: ${contactDisplay}\nCall Started: ${started}\nCall Ended: ${ended}\n\nAutomated AI Summary (MOM):\n\n${summary}\n\n---\nRaw Transcript Fragment:\n${transcriptText}`
+        }
+      } catch (err) {
+        console.error('Failed to generate AI MOM summary:', err)
+      }
+    }
 
     const timestampName = formatFilenameTimestamp(endedAt)
     const transcriptFilename = `call_transcript_${safeContactName}_${timestampName}.txt`
 
-    const transcriptBlob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const transcriptBlob = new Blob([finalContentToSave], { type: 'text/plain;charset=utf-8' })
 
     try {
       console.log('Saving locally to Projects/Calls Transcript...')

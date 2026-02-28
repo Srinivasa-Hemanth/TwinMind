@@ -3,7 +3,7 @@ declare const process: {
 }
 
 const AZURE_ENDPOINT = import.meta.env.VITE_AZURE_OPENAI_ENDPOINT || import.meta.env.REACT_APP_AZURE_OPENAI_ENDPOINT
-const AZURE_KEY = import.meta.env.VITE_AZURE_OPENAI_KEY || import.meta.env.REACT_APP_AZURE_OPENAI_KEY
+const AZURE_KEY = (import.meta.env.VITE_AZURE_OPENAI_KEY || import.meta.env.REACT_APP_AZURE_OPENAI_KEY)?.replace(/^["']|["']$/g, '').trim()
 const AZURE_DEPLOYMENT = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME || import.meta.env.REACT_APP_AZURE_DEPLOYMENT_NAME
 
 // Normalize endpoint to ignore the default template placeholder
@@ -67,23 +67,27 @@ export async function generateAzureAnswer(
     console.warn('Failed to load local project docs for context:', err)
   }
 
-  const response = await fetch(url, {
+  const response = await fetch('/api/chat', {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: isAzure ? undefined : deployment,
-      messages: [
-        {
-          role: 'system',
-          content: `You are TwinMind AI. Answer user questions accurately based on your local project knowledge base. Be conversational and helpful.${localDocsContext}`
-        },
-        ...messages.map(m => ({
-          role: m.role === 'bot' ? 'assistant' : m.role,
-          content: m.content
-        }))
-      ],
-      temperature: 0.2,
-      max_tokens: 800,
+      url,
+      headers,
+      payload: {
+        model: isAzure ? undefined : deployment,
+        messages: [
+          {
+            role: 'system',
+            content: `You are TwinMind AI. Answer user questions accurately based on your local project knowledge base. Be conversational and helpful.${localDocsContext}`
+          },
+          ...messages.map(m => ({
+            role: m.role === 'bot' ? 'assistant' : m.role,
+            content: m.content
+          }))
+        ],
+        temperature: 0.2,
+        max_tokens: 800,
+      }
     }),
   })
 
