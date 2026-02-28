@@ -1,5 +1,89 @@
-Call Started: 2026-02-28 13:29:20
-Call Ended: 2026-02-28 13:29:27
+Call Started: 2026-03-02 10:00:12
+Call Ended: 2026-03-02 10:28:46
+
+Call Participants:
+Hemanth (Main Dev)
+Sthuthi (Main Dev)
+Pravallike (BSA)
+Karthik (Client)
+Chandana (QA)
+Uday (Delivery Manager)
+TwinMind AI (Meeting Assistant)
 
 Transcript:
-this is to Tina Ki Na from beting
+
+Karthik:
+We have an urgent requirement for the BOM CAPEX project. Once a BOM is moved to the Submitted stage, we want to completely disable the Sync option. Additionally, when exporting the BOM to PDF, it should include a watermark that says “Client Approved – CAPEX”. We need this deployed by tomorrow end of day.
+
+Pravallike:
+Just to confirm the requirement — currently in Draft stage users can edit the template and use Sync, and in Submitted stage only quantities can be updated and export is allowed. Now we are adding:
+1. Disable Sync completely in Submitted stage.
+2. Add watermark in the exported PDF.
+3. Add approval timestamp in the PDF.
+Is that correct?
+
+Karthik:
+Yes, correct. Also, when a BOM is moved to Submitted stage, we want to capture the approver name and display it in Version History.
+
+Hemanth:
+From a technical perspective:
+- We need frontend validation to hide the Sync button.
+- Backend validation to block any API-level sync attempts.
+- Update database schema to add an ApprovedBy field.
+- Modify the PDF generation logic to include watermark and approval details.
+Given the timeline, we’ll create a hotfix branch and push to UAT today.
+
+Sthuthi:
+I will handle the PDF updates:
+- Add watermark layer.
+- Include approval timestamp.
+- Include Approved By name.
+We’ll test formatting to ensure it does not overlap with BOM details.
+
+Chandana:
+For QA, I’ll validate:
+1. Sync works properly in Draft stage.
+2. Sync button is disabled in Submitted stage.
+3. API sync attempt fails for Submitted BOM.
+4. Exported PDF contains watermark.
+5. PDF contains approval timestamp and approver name.
+Please provide the build by 6 PM.
+
+Uday:
+Let’s finalize timeline:
+- Development freeze by 5 PM.
+- QA cycle from 6 PM to 9 PM.
+- Deployment tomorrow at 10 AM.
+Hemanth, confirm branch strategy.
+
+Hemanth:
+We will create branch: hotfix/bom-submitted-lock.
+Backend validation and DB changes will be completed first.
+Deployment package will be shared by 5:30 PM to QA.
+
+Karthik:
+Please ensure there is no impact to Draft workflow or existing BOM data.
+
+Hemanth:
+Confirmed. Draft functionality remains unchanged. Only Submitted stage logic is being enhanced.
+
+TwinMind AI:
+Meeting Summary:
+Project: BOM CAPEX
+Priority: High
+Deployment: Tomorrow 10 AM
+
+New Enhancements:
+- Disable Sync in Submitted stage.
+- Add “Client Approved – CAPEX” watermark in PDF.
+- Capture ApprovedBy and Approval Timestamp.
+- Update Version History with approver details.
+
+Action Items:
+- Hemanth: Backend validation + branch creation.
+- Sthuthi: PDF modifications.
+- Chandana: QA validation.
+- Uday: Coordinate deployment.
+- Target Deployment: Tomorrow 10 AM.
+
+Call concluded with agreement from all stakeholders.
